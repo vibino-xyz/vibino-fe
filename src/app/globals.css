@@ -1,26 +1,173 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  /* Surfaces — deep near-black, never pure black */
+  --color-canvas: #09090b;
+  --color-surface: #111113;
+  --color-elevated: #151517;
+  --color-hairline: #1c1c1f;
+  --color-hairline-strong: #26262a;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Text */
+  --color-fg: #fafafa;
+  --color-fg-muted: #a1a1aa;
+  --color-fg-subtle: #71717a;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  /* Accent — used sparingly */
+  --color-accent: #7c3aed;
+  --color-accent-hover: #8b5cf6;
+  --color-accent-soft: #2a1d4d;
+
+  /* Semantic */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  /* Type — Inter everywhere. --font-mono is deliberately aliased to the
+     sans stack so no surface can ever render as a terminal. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+
+  --radius-card: 8px;
+  --radius-badge: 6px;
+  --radius-pill: 24px;
+
+  --animate-pulse-dot: pulse-dot 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-rise: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-fade: fade 0.4s ease-out both;
+  --animate-sheen: sheen 2.2s linear infinite;
+
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.86);
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes sheen {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(240%);
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    border-color: var(--color-hairline);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-accent) 34%, transparent);
+    color: var(--color-fg);
+  }
+
+  /* Headlines read as semibold and optically tightened, never ultra-heavy */
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  /* These four are monospace by UA default — the one way a terminal
+     look could sneak back in. Pin them to the sans stack. */
+  kbd,
+  code,
+  pre,
+  samp {
+    font-family: var(--font-sans);
+    font-size: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-hairline-strong);
+    border: 3px solid var(--color-canvas);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a3a40;
+  }
+}
+
+/* Numeric columns line up without reaching for a monospace face */
+@utility nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
