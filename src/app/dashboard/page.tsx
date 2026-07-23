@@ -1,76 +1,194 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { TopBar } from "@/components/dashboard/TopBar";
-import { INTEGRATION_ICONS } from "@/components/dashboard/integration-icons";
-import { buttonClasses } from "@/components/ui/Button";
-import { GitHubIcon, SearchIcon } from "@/components/icons";
-import { ORG, PENDING_INTEGRATIONS } from "@/lib/mock-data";
+"use client";
 
-export const metadata: Metadata = { title: "Dashboard" };
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useWorkspace } from "@/components/dashboard/WorkspaceProvider";
+import { PageContainer, PageHeader } from "@/components/dashboard/Page";
+import { ConnectGithubCard } from "@/components/dashboard/ConnectGithubCard";
+import { SourcesSummary } from "@/components/dashboard/SourcesSummary";
+import { RepositoryCard } from "@/components/dashboard/RepositoryCard";
+import { RepoPickerDialog } from "@/components/dashboard/RepoPickerDialog";
+import { BranchDialog } from "@/components/dashboard/BranchDialog";
+import { ComingSoonSources } from "@/components/dashboard/ComingSoonSources";
+import { MemberOverview } from "@/components/dashboard/MemberOverview";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PlusIcon, GitHubIcon } from "@/components/icons";
+import {
+  indexingApi,
+  type GithubConnection,
+  type IndexedRepo,
+} from "@/lib/indexing";
 
-export default function DashboardEmptyPage() {
+export default function OverviewPage() {
+  const { isManager } = useWorkspace();
+  const [connection, setConnection] = useState<GithubConnection | null>(null);
+  const [repos, setRepos] = useState<IndexedRepo[] | null>(null);
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [branchRepo, setBranchRepo] = useState<IndexedRepo | null>(null);
+  const [removeRepo, setRemoveRepo] = useState<IndexedRepo | null>(null);
+
+  const refresh = useCallback(async () => {
+    const [conn, list] = await Promise.all([
+      indexingApi.getConnection(),
+      indexingApi.listIndexedRepos(),
+    ]);
+    setConnection(conn);
+    setRepos(list);
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Poll while any repo is still working, so progress advances live.
+  const active = repos?.some((r) => r.state === "syncing" || r.state === "queued");
+  const pollRef = useRef(active);
+  pollRef.current = active;
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => {
+      indexingApi.listIndexedRepos().then(setRepos);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [active]);
+
+  if (connection === null || repos === null) {
+    return <OverviewSkeleton />;
+  }
+
+  // --- Member (read-only) ---
+  if (!isManager) {
+    return <MemberOverview connection={connection} repos={repos} />;
+  }
+
+  // --- Admin: not connected ---
+  if (!connection.connected) {
+    return (
+      <PageContainer>
+        <PageHeader
+          title="Overview"
+          description="Connect a source and Vibino builds your company's brain from it."
+        />
+        <ConnectGithubCard onConnected={() => refresh().then(() => setPickerOpen(true))} />
+        <ComingSoonSources />
+      </PageContainer>
+    );
+  }
+
+  // --- Admin: connected ---
   return (
-    <div className="min-h-dvh">
-      <TopBar showAsk={false} />
+    <PageContainer>
+      <PageHeader
+        title="Overview"
+        description="Manage the repositories Vibino indexes and watch their status."
+        actions={
+          <Button size="sm" onClick={() => setPickerOpen(true)}>
+            <PlusIcon className="size-4" />
+            Add repositories
+          </Button>
+        }
+      />
 
-      {/* Fills the space under the 56px top bar so the state reads as
-          intentional rather than stranded at the top of the page */}
-      <main className="mx-auto flex min-h-[calc(100dvh-3.5rem)] max-w-[720px] flex-col justify-center px-6 py-16">
-        <div className="animate-rise text-center">
-          <h1 className="text-[28px] font-semibold leading-tight text-fg sm:text-[32px]">
-            Welcome, {ORG.user.firstName}. Let&rsquo;s build your company&rsquo;s
-            brain.
-          </h1>
-          <p className="mt-3 text-[15px] text-fg-subtle">
-            Start by connecting your first source.
-          </p>
+      <SourcesSummary connection={connection} repos={repos} />
 
-          <Link
-            href="/dashboard/active"
-            className={buttonClasses("primary", "lg", "mt-9")}
-          >
-            <GitHubIcon className="size-[18px]" />
-            Connect GitHub
-          </Link>
-        </div>
-
-        {/* Disabled preview of the thing they unlock by connecting */}
-        <div
-          className="mt-14 animate-rise"
-          style={{ animationDelay: "80ms" }}
-          aria-hidden
-        >
-          <div className="flex h-12 w-full cursor-not-allowed items-center gap-3 rounded-pill border border-hairline bg-surface/60 px-5 opacity-60">
-            <SearchIcon className="size-4 shrink-0 text-fg-subtle" />
-            <span className="min-w-0 flex-1 truncate text-sm text-fg-subtle">
-              Connect a source to start asking questions...
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-14 animate-rise" style={{ animationDelay: "140ms" }}>
-          <h2 className="text-center text-[11px] font-medium uppercase tracking-[0.09em] text-fg-subtle">
-            Coming soon
+      <section className="mt-8">
+        <div className="mb-3.5 flex items-center justify-between">
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.09em] text-fg-subtle">
+            Repositories
           </h2>
-
-          <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-            {PENDING_INTEGRATIONS.map((integration) => {
-              const Glyph = INTEGRATION_ICONS[integration.id];
-              return (
-                <div
-                  key={integration.id}
-                  className="flex flex-col items-center gap-2.5 rounded-card border border-hairline bg-surface/50 px-3 py-5 text-center"
-                >
-                  <Glyph className="size-5 text-fg-subtle/45" />
-                  <span className="text-[12.5px] text-fg-subtle/70">
-                    {integration.name}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          {repos.length > 0 && (
+            <span className="nums text-[12px] text-fg-subtle">
+              {repos.length} {repos.length === 1 ? "repository" : "repositories"}
+            </span>
+          )}
         </div>
-      </main>
+
+        {repos.length === 0 ? (
+          <EmptyRepos onAdd={() => setPickerOpen(true)} />
+        ) : (
+          <div className="space-y-2.5">
+            {repos.map((repo) => (
+              <RepositoryCard
+                key={repo.id}
+                repo={repo}
+                manageable
+                onReindex={() => indexingApi.reindex(repo.id).then(refresh)}
+                onChangeBranch={() => setBranchRepo(repo)}
+                onRemove={() => setRemoveRepo(repo)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <ComingSoonSources />
+
+      <RepoPickerDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onAdded={refresh}
+      />
+      <BranchDialog
+        repo={branchRepo}
+        onClose={() => setBranchRepo(null)}
+        onChanged={refresh}
+      />
+      <ConfirmDialog
+        open={removeRepo !== null}
+        title="Remove repository"
+        destructive
+        confirmLabel="Remove"
+        description={
+          <>
+            Vibino will delete the index for{" "}
+            <span className="text-fg">{removeRepo?.full_name}</span> and stop
+            answering questions from it. This can&rsquo;t be undone.
+          </>
+        }
+        onConfirm={async () => {
+          if (removeRepo) await indexingApi.removeRepository(removeRepo.id);
+          await refresh();
+        }}
+        onClose={() => setRemoveRepo(null)}
+      />
+    </PageContainer>
+  );
+}
+
+function EmptyRepos({ onAdd }: { onAdd: () => void }) {
+  return (
+    <div className="flex flex-col items-center rounded-card border border-dashed border-hairline-strong bg-surface/40 px-6 py-12 text-center">
+      <span className="flex size-10 items-center justify-center rounded-card border border-hairline bg-elevated text-fg-subtle">
+        <GitHubIcon className="size-5" />
+      </span>
+      <h3 className="mt-4 text-[14px] font-medium text-fg">No repositories yet</h3>
+      <p className="mt-1.5 max-w-xs text-[13px] leading-relaxed text-fg-subtle">
+        Pick the repositories Vibino should index. You can add or remove them any
+        time.
+      </p>
+      <Button size="sm" onClick={onAdd} className="mt-5">
+        <PlusIcon className="size-4" />
+        Add repositories
+      </Button>
     </div>
+  );
+}
+
+function OverviewSkeleton() {
+  return (
+    <PageContainer>
+      <div className="mb-8 h-8 w-40 animate-fade rounded-card bg-surface" />
+      <div className="h-[104px] animate-fade rounded-card border border-hairline bg-surface" />
+      <div className="mt-8 space-y-2.5">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div
+            key={index}
+            className="h-[132px] animate-fade rounded-card border border-hairline bg-surface"
+            style={{ animationDelay: `${index * 70}ms` }}
+          />
+        ))}
+      </div>
+    </PageContainer>
   );
 }

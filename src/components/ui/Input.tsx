@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes } from "react";
+import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { cn } from "@/lib/cn";
 
 export function Label({
@@ -26,6 +26,24 @@ export function TextInput({
     <input
       className={cn(
         "h-11 w-full rounded-card border border-hairline-strong bg-surface px-3.5 text-[15px] text-fg",
+        "placeholder:text-fg-subtle",
+        "transition-colors duration-150 hover:border-[#33333a]",
+        "focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function Textarea({
+  className,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      className={cn(
+        "w-full resize-none rounded-card border border-hairline-strong bg-surface px-3.5 py-2.5 text-[14px] leading-relaxed text-fg",
         "placeholder:text-fg-subtle",
         "transition-colors duration-150 hover:border-[#33333a]",
         "focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25",

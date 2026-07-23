@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/Button";
@@ -12,6 +12,9 @@ import {
   CloseIcon,
   MailIcon,
 } from "@/components/icons";
+import { api, ApiError } from "@/lib/api";
+import { authorized, getAccessToken, setTokens } from "@/lib/session";
+import { slugify } from "@/lib/slug";
 
 type Stage = "choose" | "create" | "invite" | "join";
 
@@ -21,13 +24,40 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>("choose");
   const [orgName, setOrgName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
   const [draft, setDraft] = useState("");
   const [invites, setInvites] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Onboarding requires an authenticated session; bounce to /auth otherwise.
+  useEffect(() => {
+    if (!getAccessToken()) router.replace("/auth");
+  }, [router]);
 
   const goBack = () => {
+    setError(null);
     if (stage === "choose") return router.push("/auth");
     if (stage === "invite") return setStage("create");
     setStage("choose");
+  };
+
+  const handle = async (fn: () => Promise<void>) => {
+    setError(null);
+    setLoading(true);
+    try {
+      await fn();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onNameChange = (value: string) => {
+    setOrgName(value);
+    if (!slugEdited) setSlug(slugify(value));
   };
 
   const addInvite = () => {
@@ -46,9 +76,30 @@ export default function OnboardingPage() {
 
   const submitOrg = (event: FormEvent) => {
     event.preventDefault();
-    if (orgName.trim() === "") return;
-    setStage("invite");
+    if (orgName.trim() === "" || slug === "") return;
+    handle(async () => {
+      const result = await authorized((token) =>
+        api.createOrganization(
+          { name: orgName.trim(), slug, description: "" },
+          token,
+        ),
+      );
+      // Creating the org completes onboarding and returns org-scoped tokens.
+      setTokens(result.tokens);
+      setStage("invite");
+    });
   };
+
+  const sendInvites = () =>
+    handle(async () => {
+      await authorized((token) =>
+        api.inviteMembers(
+          invites.map((email) => ({ email, role: "MEMBER" })),
+          token,
+        ),
+      );
+      router.push("/dashboard");
+    });
 
   return (
     <AuthShell
@@ -99,15 +150,33 @@ export default function OnboardingPage() {
               autoFocus
               placeholder="Meridian Labs"
               value={orgName}
-              onChange={(event) => setOrgName(event.target.value)}
+              onChange={(event) => onNameChange(event.target.value)}
             />
+
+            <div className="mt-4">
+              <Label htmlFor="org-slug">Workspace URL</Label>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-[14px] text-fg-subtle">vibino.com/</span>
+                <TextInput
+                  id="org-slug"
+                  placeholder="meridian-labs"
+                  value={slug}
+                  onChange={(event) => {
+                    setSlugEdited(true);
+                    setSlug(slugify(event.target.value));
+                  }}
+                />
+              </div>
+            </div>
+
+            <FormError error={error} />
 
             <Button
               type="submit"
-              disabled={orgName.trim() === ""}
+              disabled={orgName.trim() === "" || slug === "" || loading}
               className="mt-5 h-11 w-full"
             >
-              Continue
+              {loading ? "Creating…" : "Continue"}
             </Button>
           </form>
         )}
@@ -118,9 +187,8 @@ export default function OnboardingPage() {
               title="Invite your teammates"
               subtitle={
                 <>
-                  Everyone at{" "}
-                  <span className="text-fg">{orgName.trim()}</span> gets the same
-                  answers, from the same sources.
+                  Everyone at <span className="text-fg">{orgName.trim()}</span> gets the
+                  same answers, from the same sources.
                 </>
               }
             />
@@ -146,9 +214,7 @@ export default function OnboardingPage() {
                 Add
               </Button>
             </div>
-            <p className="mt-2 text-[13px] text-fg-subtle">
-              Press Enter to add another.
-            </p>
+            <p className="mt-2 text-[13px] text-fg-subtle">Press Enter to add another.</p>
 
             {invites.length > 0 && (
               <ul className="mt-5 space-y-2">
@@ -164,9 +230,7 @@ export default function OnboardingPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        setInvites((current) =>
-                          current.filter((item) => item !== invite),
-                        )
+                        setInvites((current) => current.filter((item) => item !== invite))
                       }
                       aria-label={`Remove ${invite}`}
                       className="rounded-badge p-1 text-fg-subtle transition-colors hover:bg-elevated hover:text-fg"
@@ -178,14 +242,19 @@ export default function OnboardingPage() {
               </ul>
             )}
 
+            <FormError error={error} />
+
             <div className="mt-7 flex flex-col gap-2.5">
               <Button
-                onClick={() => router.push("/dashboard")}
-                disabled={invites.length === 0}
+                onClick={sendInvites}
+                disabled={invites.length === 0 || loading}
                 className="h-11 w-full"
               >
-                Send {invites.length > 0 ? invites.length : ""}{" "}
-                {invites.length === 1 ? "invite" : "invites"}
+                {loading
+                  ? "Sending…"
+                  : `Send ${invites.length > 0 ? invites.length : ""} ${
+                      invites.length === 1 ? "invite" : "invites"
+                    }`}
               </Button>
               <Button
                 variant="ghost"
@@ -207,8 +276,8 @@ export default function OnboardingPage() {
               Ask your admin for an invite
             </h1>
             <p className="mx-auto mt-2.5 max-w-sm text-[15px] leading-relaxed text-fg-subtle">
-              Ask your admin to invite you via email. The moment they do, your
-              workspace appears here — nothing else to set up.
+              Ask your admin to invite you via email. The moment they do, your workspace
+              appears here — nothing else to set up.
             </p>
 
             <Button
@@ -222,6 +291,15 @@ export default function OnboardingPage() {
         )}
       </div>
     </AuthShell>
+  );
+}
+
+function FormError({ error }: { error: string | null }) {
+  if (!error) return null;
+  return (
+    <p className="mt-4 rounded-card border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger">
+      {error}
+    </p>
   );
 }
 
@@ -249,9 +327,7 @@ function ChoiceCard({
         {title}
         <ChevronRightIcon className="size-4 text-fg-subtle transition-transform duration-200 group-hover:translate-x-0.5" />
       </span>
-      <span className="mt-2 block text-sm leading-relaxed text-fg-subtle">
-        {body}
-      </span>
+      <span className="mt-2 block text-sm leading-relaxed text-fg-subtle">{body}</span>
     </button>
   );
 }

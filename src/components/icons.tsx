@@ -320,3 +320,98 @@ export function SparkIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function HomeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 10.5 12 4l8 6.5" />
+      <path d="M5.5 9.4V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.4" />
+      <path d="M9.5 20v-5.5h5V20" />
+    </Icon>
+  );
+}
+
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m5 9 7 7 7-7" />
+    </Icon>
+  );
+}
+
+export function ChevronUpDownIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m8 9 4-4 4 4M8 15l4 4 4-4" />
+    </Icon>
+  );
+}
+
+export function LogoutIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" />
+      <path d="M16 17l5-5-5-5M21 12H9" />
+    </Icon>
+  );
+}
+
+export function BranchIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="6.5" cy="5" r="2.5" />
+      <circle cx="6.5" cy="19" r="2.5" />
+      <circle cx="17.5" cy="7" r="2.5" />
+      <path d="M6.5 7.5v9" />
+      <path d="M17.5 9.5c0 4-3.5 4.5-6 5.2" />
+    </Icon>
+  );
+}
+
+export function TrashIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 7h16M9.5 7V5.5a1.5 1.5 0 0 1 1.5-1.5h2a1.5 1.5 0 0 1 1.5 1.5V7" />
+      <path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7" />
+      <path d="M10 11v6M14 11v6" />
+    </Icon>
+  );
+}
+
+export function MoreIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="6" cy="12" r="1.4" />
+      <circle cx="12" cy="12" r="1.4" />
+      <circle cx="18" cy="12" r="1.4" />
+    </Icon>
+  );
+}
+
+export function RepoBookIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v14H6.5A1.5 1.5 0 0 0 5 18.5z" />
+      <path d="M5 18.5A1.5 1.5 0 0 0 6.5 20H19v1H6.5A1.5 1.5 0 0 1 5 19.5z" />
+    </Icon>
+  );
+}
+
+export function UserIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M5 20c0-3.6 3.1-5.5 7-5.5s7 1.9 7 5.5" />
+    </Icon>
+  );
+}
+
+export function BuildingIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 21V6a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v15" />
+      <path d="M15 10h4a1 1 0 0 1 1 1v10" />
+      <path d="M8 9h3M8 13h3M8 17h3M3 21h18" />
+    </Icon>
+  );
+}
