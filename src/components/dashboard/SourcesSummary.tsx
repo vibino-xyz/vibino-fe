@@ -1,7 +1,8 @@
 import { GitHubIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/Badge";
 import { formatNumber, timeAgo } from "@/lib/format";
-import type { GithubConnection, IndexedRepo } from "@/lib/indexing";
+import type { GithubConnection } from "@/lib/api";
+import type { IndexedRepo } from "@/lib/indexing";
 
 export function SourcesSummary({
   connection,
@@ -42,7 +43,7 @@ export function SourcesSummary({
           </div>
           {connection.account_login && (
             <p className="mt-0.5 truncate text-[12.5px] text-fg-subtle">
-              {connection.account_login} · connected {timeAgo(connection.connected_at)}
+              {connection.account_login}
             </p>
           )}
         </div>

@@ -6,25 +6,31 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { CheckIcon, BranchIcon, ShieldIcon, SearchIcon } from "@/components/icons";
-import { indexingApi, type ConnectableRepo, type RepoSelection } from "@/lib/indexing";
+import { githubApi, type GithubRepo } from "@/lib/github";
+import { indexingApi, type AddRepoInput } from "@/lib/indexing";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
 interface Selection {
   checked: boolean;
   branch: string;
+  branches: string[]; // lazily loaded real branches
+  loadingBranches: boolean;
 }
 
 export function RepoPickerDialog({
   open,
   onClose,
   onAdded,
+  alreadyIndexed,
 }: {
   open: boolean;
   onClose: () => void;
   onAdded: () => void;
+  alreadyIndexed: string[];
 }) {
-  const [repos, setRepos] = useState<ConnectableRepo[] | null>(null);
+  const [repos, setRepos] = useState<GithubRepo[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [selections, setSelections] = useState<Record<string, Selection>>({});
   const [query, setQuery] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -32,35 +38,82 @@ export function RepoPickerDialog({
   useEffect(() => {
     if (!open) return;
     setRepos(null);
+    setError(null);
     setSelections({});
     setQuery("");
-    indexingApi.listConnectableRepos().then((list) => {
-      setRepos(list);
-      setSelections(
-        Object.fromEntries(
-          list.map((r) => [r.external_id, { checked: false, branch: r.default_branch }]),
-        ),
-      );
-    });
+    githubApi
+      .listRepositories()
+      .then((list) => {
+        setRepos(list);
+        setSelections(
+          Object.fromEntries(
+            list.map((r) => [
+              String(r.external_id),
+              {
+                checked: false,
+                branch: r.default_branch,
+                branches: [r.default_branch],
+                loadingBranches: false,
+              },
+            ]),
+          ),
+        );
+      })
+      .catch(() => setError("Couldn't load repositories from GitHub."));
   }, [open]);
 
-  const toggle = (id: string) =>
-    setSelections((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], checked: !prev[id].checked },
-    }));
+  const toggle = (repo: GithubRepo) => {
+    const key = String(repo.external_id);
+    setSelections((prev) => {
+      const current = prev[key];
+      const nextChecked = !current.checked;
+      // Lazily fetch the real branch list the first time a repo is selected.
+      if (nextChecked && current.branches.length <= 1 && !current.loadingBranches) {
+        githubApi
+          .listBranches(repo.full_name)
+          .then((branches) =>
+            setSelections((p) => ({
+              ...p,
+              [key]: {
+                ...p[key],
+                branches: branches.length ? branches : [repo.default_branch],
+                loadingBranches: false,
+              },
+            })),
+          )
+          .catch(() =>
+            setSelections((p) => ({ ...p, [key]: { ...p[key], loadingBranches: false } })),
+          );
+      }
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          checked: nextChecked,
+          loadingBranches: nextChecked && current.branches.length <= 1,
+        },
+      };
+    });
+  };
 
-  const setBranch = (id: string, branch: string) =>
-    setSelections((prev) => ({ ...prev, [id]: { ...prev[id], branch } }));
+  const setBranch = (key: string, branch: string) =>
+    setSelections((prev) => ({ ...prev, [key]: { ...prev[key], branch } }));
 
-  const chosen = Object.entries(selections).filter(([, s]) => s.checked);
+  const chosen = (repos ?? []).filter((r) => selections[String(r.external_id)]?.checked);
 
   const submit = async () => {
-    const payload: RepoSelection[] = chosen.map(([external_id, s]) => ({
-      external_id,
-      branch: s.branch,
-    }));
-    if (payload.length === 0) return;
+    if (chosen.length === 0) return;
+    const payload: AddRepoInput[] = chosen.map((r) => {
+      const sel = selections[String(r.external_id)];
+      return {
+        external_id: String(r.external_id),
+        full_name: r.full_name,
+        language: r.language ?? "—",
+        is_private: r.private,
+        branch: sel.branch || r.default_branch,
+        description: r.description ?? undefined,
+      };
+    });
     setSubmitting(true);
     try {
       await indexingApi.addRepositories(payload);
@@ -71,8 +124,11 @@ export function RepoPickerDialog({
     }
   };
 
-  const filtered = (repos ?? []).filter((r) =>
-    r.full_name.toLowerCase().includes(query.trim().toLowerCase()),
+  const indexed = new Set(alreadyIndexed);
+  const filtered = (repos ?? []).filter(
+    (r) =>
+      !indexed.has(String(r.external_id)) &&
+      r.full_name.toLowerCase().includes(query.trim().toLowerCase()),
   );
 
   return (
@@ -87,11 +143,7 @@ export function RepoPickerDialog({
           <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            size="sm"
-            onClick={submit}
-            disabled={chosen.length === 0 || submitting}
-          >
+          <Button size="sm" onClick={submit} disabled={chosen.length === 0 || submitting}>
             {submitting
               ? "Starting…"
               : `Index ${chosen.length || ""} ${chosen.length === 1 ? "repository" : "repositories"}`.trim()}
@@ -99,7 +151,6 @@ export function RepoPickerDialog({
         </>
       }
     >
-      {/* Search */}
       <div className="mb-3 flex h-9 items-center gap-2.5 rounded-card border border-hairline-strong bg-canvas px-3">
         <SearchIcon className="size-4 shrink-0 text-fg-subtle" />
         <input
@@ -110,22 +161,27 @@ export function RepoPickerDialog({
         />
       </div>
 
-      {repos === null ? (
+      {error ? (
+        <p className="py-10 text-center text-[13px] text-danger">{error}</p>
+      ) : repos === null ? (
         <LoadingRows />
       ) : filtered.length === 0 ? (
         <p className="py-10 text-center text-[13px] text-fg-subtle">
-          {repos.length === 0
-            ? "All available repositories are already indexed."
-            : "No repositories match your search."}
+          {(repos.length === 0)
+            ? "The installation can't see any repositories. Grant the Vibino GitHub App access to more repos in GitHub."
+            : indexed.size >= repos.length
+              ? "All accessible repositories are already indexed."
+              : "No repositories match your search."}
         </p>
       ) : (
         <ul className="space-y-1.5">
           {filtered.map((repo) => {
-            const selection = selections[repo.external_id];
+            const key = String(repo.external_id);
+            const selection = selections[key];
             const checked = selection?.checked;
             return (
               <li
-                key={repo.external_id}
+                key={key}
                 className={cn(
                   "rounded-card border px-3 py-2.5 transition-colors",
                   checked
@@ -138,7 +194,7 @@ export function RepoPickerDialog({
                     type="button"
                     role="checkbox"
                     aria-checked={checked}
-                    onClick={() => toggle(repo.external_id)}
+                    onClick={() => toggle(repo)}
                     className={cn(
                       "flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-colors",
                       checked
@@ -151,21 +207,21 @@ export function RepoPickerDialog({
 
                   <button
                     type="button"
-                    onClick={() => toggle(repo.external_id)}
+                    onClick={() => toggle(repo)}
                     className="min-w-0 flex-1 text-left"
                   >
                     <span className="flex items-center gap-1.5">
                       <span className="truncate text-[13.5px] font-medium text-fg">
                         {repo.full_name}
                       </span>
-                      {repo.is_private && (
+                      {repo.private && (
                         <ShieldIcon className="size-3.5 shrink-0 text-fg-subtle" />
                       )}
                     </span>
                     <span className="mt-0.5 flex items-center gap-2 text-[12px] text-fg-subtle">
-                      <span>{repo.language}</span>
-                      <span className="text-hairline-strong">·</span>
-                      <span>updated {timeAgo(repo.updated_at)}</span>
+                      {repo.language && <span>{repo.language}</span>}
+                      {repo.language && <span className="text-hairline-strong">·</span>}
+                      <span>updated {timeAgo(repo.pushed_at)}</span>
                     </span>
                   </button>
 
@@ -174,10 +230,11 @@ export function RepoPickerDialog({
                       <BranchIcon className="size-3.5 text-fg-subtle" />
                       <Select
                         value={selection.branch}
-                        onChange={(event) => setBranch(repo.external_id, event.target.value)}
-                        className="h-8 w-auto min-w-[110px]"
+                        onChange={(event) => setBranch(key, event.target.value)}
+                        disabled={selection.loadingBranches}
+                        className="h-8 w-auto min-w-[120px]"
                       >
-                        {repo.branches.map((branch) => (
+                        {selection.branches.map((branch) => (
                           <option key={branch} value={branch}>
                             {branch}
                           </option>

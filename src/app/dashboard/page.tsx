@@ -13,11 +13,9 @@ import { MemberOverview } from "@/components/dashboard/MemberOverview";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PlusIcon, GitHubIcon } from "@/components/icons";
-import {
-  indexingApi,
-  type GithubConnection,
-  type IndexedRepo,
-} from "@/lib/indexing";
+import { githubApi } from "@/lib/github";
+import { indexingApi, type IndexedRepo } from "@/lib/indexing";
+import type { GithubConnection } from "@/lib/api";
 
 export default function OverviewPage() {
   const { isManager } = useWorkspace();
@@ -30,7 +28,7 @@ export default function OverviewPage() {
 
   const refresh = useCallback(async () => {
     const [conn, list] = await Promise.all([
-      indexingApi.getConnection(),
+      githubApi.getConnection(),
       indexingApi.listIndexedRepos(),
     ]);
     setConnection(conn);
@@ -70,7 +68,7 @@ export default function OverviewPage() {
           title="Overview"
           description="Connect a source and Vibino builds your company's brain from it."
         />
-        <ConnectGithubCard onConnected={() => refresh().then(() => setPickerOpen(true))} />
+        <ConnectGithubCard configured={connection.configured} />
         <ComingSoonSources />
       </PageContainer>
     );
@@ -128,6 +126,7 @@ export default function OverviewPage() {
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onAdded={refresh}
+        alreadyIndexed={repos.map((r) => r.external_id)}
       />
       <BranchDialog
         repo={branchRepo}

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Label } from "@/components/ui/Input";
-import { indexingApi, repoBranches, type IndexedRepo } from "@/lib/indexing";
+import { githubApi } from "@/lib/github";
+import { indexingApi, type IndexedRepo } from "@/lib/indexing";
 
 export function BranchDialog({
   repo,
@@ -17,9 +18,19 @@ export function BranchDialog({
   onChanged: () => void;
 }) {
   const [branch, setBranch] = useState(repo?.branch ?? "main");
+  const [branches, setBranches] = useState<string[]>(repo ? [repo.branch] : []);
   const [submitting, setSubmitting] = useState(false);
 
-  const branches = repo ? repoBranches(repo.external_id) : [];
+  // Load the repo's real branches from GitHub when the dialog opens.
+  useEffect(() => {
+    if (!repo) return;
+    setBranch(repo.branch);
+    setBranches([repo.branch]);
+    githubApi
+      .listBranches(repo.full_name)
+      .then((list) => setBranches(list.length ? list : [repo.branch]))
+      .catch(() => setBranches([repo.branch]));
+  }, [repo]);
 
   const submit = async () => {
     if (!repo) return;

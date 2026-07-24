@@ -1,10 +1,12 @@
 /**
- * Typed client for the nexy auth service. All calls go to the same-origin
- * base path (default "/api/nexy") which Next.js proxies to the Go backend, so
- * the browser never makes a cross-origin request.
+ * Typed client for the backend services, reached via same-origin base paths
+ * that Next.js proxies (so the browser never makes a cross-origin request):
+ *   /api/nexy   — auth/authz (users, orgs, members, tokens)
+ *   /api/synthy — GitHub integration + indexing (connect, repos, status)
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/nexy";
+const SYNTHY_API_BASE = process.env.NEXT_PUBLIC_SYNTHY_API_BASE_URL ?? "/api/synthy";
 
 export type OnboardingStep = "PASSWORD" | "PROFILE" | "ORGANIZATION" | "COMPLETE";
 
@@ -102,6 +104,26 @@ export interface InvitationView {
   created_at: string;
 }
 
+export interface GithubConnection {
+  configured: boolean;
+  connected: boolean;
+  account_login?: string;
+  installation_id?: number;
+}
+
+export interface GithubRepo {
+  external_id: number;
+  full_name: string;
+  name: string;
+  owner: string;
+  description?: string | null;
+  private: boolean;
+  default_branch: string;
+  language?: string | null;
+  html_url: string;
+  pushed_at: string;
+}
+
 /** Error carrying the HTTP status so callers can branch on it. */
 export class ApiError extends Error {
   constructor(
@@ -117,10 +139,11 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   token?: string;
+  base?: string; // defaults to nexy; pass SYNTHY_API_BASE for synthy calls
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "POST", body, token } = options;
+  const { method = "POST", body, token, base = API_BASE } = options;
 
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -128,13 +151,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetch(`${base}${path}`, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError(0, "Unable to reach the server. Is nexy running?");
+    throw new ApiError(0, "Unable to reach the server.");
   }
 
   if (res.status === 204) return undefined as T;
@@ -257,4 +280,47 @@ export const api = {
       method: "DELETE",
       token,
     }),
+
+  // --- GitHub App (served by synthy) ---
+
+  githubConnection: (token: string) =>
+    request<GithubConnection>("/github/connection", {
+      method: "GET",
+      token,
+      base: SYNTHY_API_BASE,
+    }),
+
+  githubInstallUrl: (token: string) =>
+    request<{ url: string }>("/github/install-url", {
+      method: "GET",
+      token,
+      base: SYNTHY_API_BASE,
+    }),
+
+  githubConnect: (installationId: number, state: string, token: string) =>
+    request<GithubConnection>("/github/connect", {
+      body: { installation_id: installationId, state },
+      token,
+      base: SYNTHY_API_BASE,
+    }),
+
+  githubDisconnect: (token: string) =>
+    request<void>("/github/connection", {
+      method: "DELETE",
+      token,
+      base: SYNTHY_API_BASE,
+    }),
+
+  githubRepositories: (token: string) =>
+    request<{ repositories: GithubRepo[] }>("/github/repositories", {
+      method: "GET",
+      token,
+      base: SYNTHY_API_BASE,
+    }),
+
+  githubBranches: (repoFullName: string, token: string) =>
+    request<{ branches: string[] }>(
+      `/github/branches?repo=${encodeURIComponent(repoFullName)}`,
+      { method: "GET", token, base: SYNTHY_API_BASE },
+    ),
 };

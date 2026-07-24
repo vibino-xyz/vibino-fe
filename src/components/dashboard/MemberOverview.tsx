@@ -7,7 +7,8 @@ import { RepositoryCard } from "@/components/dashboard/RepositoryCard";
 import { buttonClasses } from "@/components/ui/Button";
 import { MessageIcon, ArrowUpRightIcon, GitHubIcon } from "@/components/icons";
 import { CHAT_APP_URL } from "@/lib/config";
-import type { GithubConnection, IndexedRepo } from "@/lib/indexing";
+import type { GithubConnection } from "@/lib/api";
+import type { IndexedRepo } from "@/lib/indexing";
 
 export function MemberOverview({
   connection,

@@ -163,35 +163,39 @@ export function RepositoryCard({
         </div>
       )}
 
-      {/* Footer: last commit + stats */}
-      {!isQueued && (
+      {/* Footer: last commit (when known) + stats */}
+      {!isQueued && (repo.last_commit || repo.state === "indexed") && (
         <div className="border-t border-hairline px-4 py-3 sm:px-5">
-          <div className="flex items-center gap-2.5">
-            <CommitIcon className="size-4 shrink-0 text-fg-subtle" />
-            <span className="nums shrink-0 text-[12.5px] font-medium text-fg-muted">
-              {shortSha(repo.last_commit.sha)}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-[12.5px] text-fg-muted">
-              {repo.last_commit.message}
-            </span>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-fg-subtle">
-            <span className="inline-flex items-center gap-1.5">
-              <Avatar
-                label={authorInitials(repo.last_commit.author_name)}
-                seed={repo.last_commit.author_name}
-                size={16}
-              />
-              {repo.last_commit.author_name}
-            </span>
-            <span className="text-hairline-strong">·</span>
-            <span>committed {timeAgo(repo.last_commit.committed_at)}</span>
+          {repo.last_commit && (
+            <div className="flex items-center gap-2.5">
+              <CommitIcon className="size-4 shrink-0 text-fg-subtle" />
+              <span className="nums shrink-0 text-[12.5px] font-medium text-fg-muted">
+                {shortSha(repo.last_commit.sha)}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-fg-muted">
+                {repo.last_commit.message}
+              </span>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-fg-subtle data-[with-commit=true]:mt-2" data-with-commit={Boolean(repo.last_commit)}>
+            {repo.last_commit && (
+              <>
+                <span className="inline-flex items-center gap-1.5">
+                  <Avatar
+                    label={authorInitials(repo.last_commit.author_name)}
+                    seed={repo.last_commit.author_name}
+                    size={16}
+                  />
+                  {repo.last_commit.author_name}
+                </span>
+                <span className="text-hairline-strong">·</span>
+                <span>committed {timeAgo(repo.last_commit.committed_at)}</span>
+              </>
+            )}
             {repo.state === "indexed" && (
               <>
-                <span className="text-hairline-strong">·</span>
-                <span className="nums">
-                  {formatNumber(repo.file_count)} files
-                </span>
+                {repo.last_commit && <span className="text-hairline-strong">·</span>}
+                <span className="nums">{formatNumber(repo.file_count)} files</span>
                 <span className="text-hairline-strong">·</span>
                 <span className="nums">{formatNumber(repo.chunk_count)} chunks</span>
                 <span className="text-hairline-strong">·</span>
